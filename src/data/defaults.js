@@ -31,7 +31,7 @@ export const OWNER = {
   email: 'seshasundharamoorthi2005@gmail.com',
   whatsapp: '918148313598',
   github: 'https://github.com/seshaSundharamoorthi',
-  linkedin: 'https://linkedin.com/in/sesha-s-32b2672a6',
+  linkedin: 'https://www.linkedin.com/in/sesha-s-32b2672a6/',
   stats: [
     { value: '1.5+', label: 'Years Experience' },
     { value: '3+', label: 'Projects Done' },

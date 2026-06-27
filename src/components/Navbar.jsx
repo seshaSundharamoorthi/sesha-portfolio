@@ -51,13 +51,13 @@ export default function Navbar() {
 
         {/* Icons */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <a href={OWNER.github} target="_blank" rel="noreferrer"
+          <a href={OWNER.github} target="_blank" rel="noopener noreferrer"
             style={{ color: '#6b7280', transition: 'color .2s' }}
             onMouseEnter={e => e.currentTarget.style.color = '#7C3AED'}
             onMouseLeave={e => e.currentTarget.style.color = '#6b7280'}>
             <Github size={20} />
           </a>
-          <a href={OWNER.linkedin} target="_blank" rel="noreferrer"
+          <a href={OWNER.linkedin} target="_blank" rel="noopener noreferrer"
             style={{ color: '#6b7280', transition: 'color .2s' }}
             onMouseEnter={e => e.currentTarget.style.color = '#7C3AED'}
             onMouseLeave={e => e.currentTarget.style.color = '#6b7280'}>

@@ -33,7 +33,7 @@ export default function Contact() {
       icon: <Linkedin size={20} />,
       label: 'LINKEDIN',
       value: 'www.linkedin.com/in/sesha-s-32b2672a6',
-      href: `https://${OWNER.linkedin}`,
+      href: OWNER.linkedin,
       color: '#0077b5', bg: '#eff6ff',
     },
   ]
@@ -85,7 +85,7 @@ export default function Contact() {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {contacts.map((c, i) => (
-                <a key={i} href={c.href} target={c.href.startsWith('mailto') ? '_self' : '_blank'} rel="noreferrer"
+                <a key={i} href={c.href} target={c.href.startsWith('mailto') ? '_self' : '_blank'} rel="noopener noreferrer"
                   style={{
                     display: 'flex', alignItems: 'center', gap: 14,
                     padding: '14px 18px', borderRadius: 14,
