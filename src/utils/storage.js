@@ -1,172 +1,278 @@
+import { createClient } from '@supabase/supabase-js'
 import { DEFAULT_PROJECTS } from '../data/defaults'
 
-// ============================================================
-// JSONBin Cloud Storage — data visible to ALL visitors!
-// Free at jsonbin.io
-// ============================================================
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-const API_KEY = '$2a$10$7nljiQRl2JPCQe1.zlMTxeKbnz4EVUdqewdjVuDYYv6/of4yNefcK'
-const BASE_URL = 'https://api.jsonbin.io/v3'
+let supabase = null
 
-// We use ONE bin for all data: { projects, photo, resumeUrl, resumeName }
-const BIN_KEY = 'ss_portfolio_bin_id'
-
-async function createBin(data) {
-  const res = await fetch(`${BASE_URL}/b`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Master-Key': API_KEY,
-      'X-Bin-Name': 'sesha-portfolio',
-      'X-Bin-Private': 'false',
-    },
-    body: JSON.stringify(data),
-  })
-  const json = await res.json()
-  return json.metadata?.id || null
+if (supabaseUrl && supabaseAnonKey && !supabaseUrl.includes('your-project-ref')) {
+  supabase = createClient(supabaseUrl, supabaseAnonKey)
+} else {
+  console.warn(
+    'Supabase credentials not configured or using default placeholders. Using mock/default data fallback.'
+  )
 }
 
-async function getBinId() {
-  let id = localStorage.getItem(BIN_KEY)
-  if (id) return id
-
-  // Try to find existing bin by name
+// Helper to extract file name from Supabase storage URL
+function getFilenameFromUrl(url) {
+  if (!url) return null
   try {
-    const res = await fetch(`${BASE_URL}/b`, {
-      headers: { 'X-Master-Key': API_KEY }
-    })
-    // If no existing bin found, create new one
-  } catch (_) {}
-
-  // Create new bin with default data
-  const defaultData = {
-    projects: DEFAULT_PROJECTS,
-    photo: null,
-    resumeData: null,
-    resumeName: 'Resume.pdf',
+    const parts = url.split('/')
+    return parts[parts.length - 1].split('?')[0] // Remove query parameters if any
+  } catch (_) {
+    return null
   }
-  id = await createBin(defaultData)
-  if (id) localStorage.setItem(BIN_KEY, id)
-  return id
 }
 
-async function readBin() {
+// Fetch the single row of metadata
+async function getMetadata() {
+  if (!supabase) return null
   try {
-    const id = await getBinId()
-    if (!id) return null
-    const res = await fetch(`${BASE_URL}/b/${id}/latest`, {
-      headers: { 'X-Master-Key': API_KEY }
-    })
-    const json = await res.json()
-    return json.record || null
-  } catch (_) { return null }
-}
+    const { data, error } = await supabase
+      .from('portfolio_metadata')
+      .select('*')
+      .eq('id', 1)
+      .single()
 
-async function writeBin(data) {
-  try {
-    const id = await getBinId()
-    if (!id) return false
-    await fetch(`${BASE_URL}/b/${id}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Master-Key': API_KEY,
-      },
-      body: JSON.stringify(data),
-    })
-    return true
-  } catch (_) { return false }
-}
-
-// Cache to avoid too many API calls
-let _cache = null
-let _cacheTime = 0
-const CACHE_TTL = 30000 // 30 seconds
-
-async function getData() {
-  const now = Date.now()
-  if (_cache && (now - _cacheTime) < CACHE_TTL) return _cache
-  const data = await readBin()
-  if (data) {
-    _cache = data
-    _cacheTime = now
+    if (error) {
+      // PGRST116 means 0 rows returned
+      if (error.code === 'PGRST116') {
+        const { data: newRow, error: insertError } = await supabase
+          .from('portfolio_metadata')
+          .insert([{ id: 1 }])
+          .select()
+          .single()
+        if (!insertError) return newRow
+      }
+      throw error
+    }
+    return data
+  } catch (err) {
+    console.error('Error fetching portfolio metadata:', err)
+    return null
   }
-  return data || { projects: DEFAULT_PROJECTS, photo: null, resumeData: null, resumeName: 'Resume.pdf' }
-}
-
-async function setData(updates) {
-  const current = await getData()
-  const newData = { ...current, ...updates }
-  await writeBin(newData)
-  _cache = newData
-  _cacheTime = Date.now()
-  return true
 }
 
 // ============================================================
 // PROJECTS
 // ============================================================
 export async function getProjects() {
-  const data = await getData()
-  return (data.projects && data.projects.length > 0) ? data.projects : DEFAULT_PROJECTS
-}
+  if (!supabase) return DEFAULT_PROJECTS
+  try {
+    const { data, error } = await supabase
+      .from('projects')
+      .select('*')
+      .order('created_at', { ascending: true })
 
-export async function saveProjects(projects) {
-  return await setData({ projects })
+    if (error) throw error
+    return data && data.length > 0 ? data : DEFAULT_PROJECTS
+  } catch (err) {
+    console.error('Error fetching projects from Supabase:', err)
+    return DEFAULT_PROJECTS
+  }
 }
 
 export async function addProject(project) {
-  const projects = await getProjects()
-  const newProj = { ...project, id: 'proj_' + Date.now() }
-  await saveProjects([...projects, newProj])
-  return newProj
+  if (!supabase) {
+    console.error('Supabase not configured')
+    return null
+  }
+  try {
+    const { data, error } = await supabase
+      .from('projects')
+      .insert([project])
+      .select()
+      .single()
+
+    if (error) throw error
+    return data
+  } catch (err) {
+    console.error('Error adding project:', err)
+    return null
+  }
 }
 
 export async function updateProject(id, updates) {
-  const projects = await getProjects()
-  await saveProjects(projects.map(p => p.id === id ? { ...p, ...updates } : p))
+  if (!supabase) {
+    console.error('Supabase not configured')
+    return
+  }
+  try {
+    const { error } = await supabase
+      .from('projects')
+      .update(updates)
+      .eq('id', id)
+
+    if (error) throw error
+  } catch (err) {
+    console.error('Error updating project:', err)
+  }
 }
 
 export async function deleteProject(id) {
-  const projects = await getProjects()
-  await saveProjects(projects.filter(p => p.id !== id))
+  if (!supabase) {
+    console.error('Supabase not configured')
+    return
+  }
+  try {
+    const { error } = await supabase
+      .from('projects')
+      .delete()
+      .eq('id', id)
+
+    if (error) throw error
+  } catch (err) {
+    console.error('Error deleting project:', err)
+  }
 }
 
 // ============================================================
 // PHOTO
 // ============================================================
 export async function getPhoto() {
-  const data = await getData()
-  return data.photo || null
+  const metadata = await getMetadata()
+  return metadata?.photo_url || null
 }
 
-export async function savePhoto(base64) {
-  return await setData({ photo: base64 })
+export async function savePhoto(file) {
+  if (!supabase) {
+    console.error('Supabase not configured')
+    return false
+  }
+  try {
+    // 1. Delete old photo if it exists to avoid storage pollution
+    const metadata = await getMetadata()
+    const oldFilename = getFilenameFromUrl(metadata?.photo_url)
+    if (oldFilename) {
+      await supabase.storage.from('portfolio-assets').remove([oldFilename])
+    }
+
+    // 2. Generate a unique filename
+    const fileExt = file.name ? file.name.split('.').pop() : 'png'
+    const fileName = `profile-photo-${Date.now()}.${fileExt}`
+
+    // 3. Upload new photo to Supabase Storage bucket
+    const { error: uploadError } = await supabase.storage
+      .from('portfolio-assets')
+      .upload(fileName, file, {
+        cacheControl: '3600',
+        upsert: true,
+      })
+
+    if (uploadError) throw uploadError
+
+    // 4. Retrieve public URL
+    const { data: { publicUrl } } = supabase.storage
+      .from('portfolio-assets')
+      .getPublicUrl(fileName)
+
+    // 5. Update metadata table
+    const { error: dbError } = await supabase
+      .from('portfolio_metadata')
+      .update({ photo_url: publicUrl })
+      .eq('id', 1)
+
+    if (dbError) throw dbError
+    return true
+  } catch (err) {
+    console.error('Error saving photo to Supabase:', err)
+    return false
+  }
 }
 
 // ============================================================
 // RESUME
 // ============================================================
 export async function getResume() {
-  const data = await getData()
+  const metadata = await getMetadata()
   return {
-    data: data.resumeData || null,
-    name: data.resumeName || 'Resume.pdf',
+    data: metadata?.resume_url || null,
+    name: metadata?.resume_name || 'Resume.pdf',
   }
 }
 
-export async function saveResume(base64, name) {
-  return await setData({ resumeData: base64, resumeName: name })
+export async function saveResume(file, name) {
+  if (!supabase) {
+    console.error('Supabase not configured')
+    return false
+  }
+  try {
+    // 1. Delete old resume if it exists to avoid storage pollution
+    const metadata = await getMetadata()
+    const oldFilename = getFilenameFromUrl(metadata?.resume_url)
+    if (oldFilename) {
+      await supabase.storage.from('portfolio-assets').remove([oldFilename])
+    }
+
+    // 2. Generate a unique filename
+    const fileExt = file.name ? file.name.split('.').pop() : 'pdf'
+    const fileName = `resume-${Date.now()}.${fileExt}`
+
+    // 3. Upload new resume to Supabase Storage bucket
+    const { error: uploadError } = await supabase.storage
+      .from('portfolio-assets')
+      .upload(fileName, file, {
+        cacheControl: '3600',
+        upsert: true,
+      })
+
+    if (uploadError) throw uploadError
+
+    // 4. Retrieve public URL
+    const { data: { publicUrl } } = supabase.storage
+      .from('portfolio-assets')
+      .getPublicUrl(fileName)
+
+    // 5. Update metadata table
+    const { error: dbError } = await supabase
+      .from('portfolio_metadata')
+      .update({ resume_url: publicUrl, resume_name: name })
+      .eq('id', 1)
+
+    if (dbError) throw dbError
+    return true
+  } catch (err) {
+    console.error('Error saving resume to Supabase:', err)
+    return false
+  }
 }
 
 // ============================================================
-// ADMIN PASSWORD (kept local — only admin needs this)
+// ADMIN AUTHENTICATION
 // ============================================================
-export function checkAdminPass(pass) {
-  const stored = localStorage.getItem('ss_admin_pass') || 'sesha123'
-  return pass === stored
+export async function loginAdmin(email, password) {
+  if (!supabase) {
+    return { success: false, error: 'Supabase is not configured yet. Check .env.local' }
+  }
+  try {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email,
+      password: password,
+    })
+    if (error) throw error
+    return { success: true, user: data.user }
+  } catch (err) {
+    console.error('Admin login failed:', err)
+    return { success: false, error: err.message || 'Authentication failed' }
+  }
 }
 
-export function setAdminPass(newPass) {
-  localStorage.setItem('ss_admin_pass', newPass)
+export async function logoutAdmin() {
+  if (!supabase) return
+  try {
+    await supabase.auth.signOut()
+  } catch (err) {
+    console.error('Logout failed:', err)
+  }
+}
+
+export async function getAdminSession() {
+  if (!supabase) return null
+  try {
+    const { data: { session } } = await supabase.auth.getSession()
+    return session?.user || null
+  } catch (_) {
+    return null
+  }
 }

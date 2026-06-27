@@ -32,7 +32,7 @@ export default function Contact() {
     {
       icon: <Linkedin size={20} />,
       label: 'LINKEDIN',
-      value: 'linkedin.com/in/sesha-s',
+      value: 'www.linkedin.com/in/sesha-s-32b2672a6',
       href: `https://${OWNER.linkedin}`,
       color: '#0077b5', bg: '#eff6ff',
     },

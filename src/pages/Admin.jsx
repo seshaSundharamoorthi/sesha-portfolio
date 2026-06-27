@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
 import { Lock, Plus, Trash2, Edit3, Save, X, Upload, FileText, Image, Eye, EyeOff, CheckCircle, LogOut, Loader } from 'lucide-react'
-import { getProjects, addProject, updateProject, deleteProject, getPhoto, savePhoto, getResume, saveResume, checkAdminPass } from '../utils/storage'
+import { getProjects, addProject, updateProject, deleteProject, getPhoto, savePhoto, getResume, saveResume, loginAdmin, logoutAdmin, getAdminSession } from '../utils/storage'
 
 const EMPTY_FORM = { name: '', shortDesc: '', description: '', tech: '', github: '', demo: '', color: '#7C3AED' }
 const COLORS = ['#7C3AED', '#EC4899', '#F97316', '#06B6D4', '#10B981', '#8B5CF6', '#EF4444', '#F59E0B']
 
 export default function Admin() {
   const [loggedIn, setLoggedIn] = useState(false)
+  const [email, setEmail] = useState('')
   const [pass, setPass] = useState('')
   const [showPass, setShowPass] = useState(false)
   const [error, setError] = useState('')
@@ -29,6 +30,17 @@ export default function Admin() {
   const photoRef = useRef()
   const resumeRef = useRef()
 
+  // Check if admin is already logged in on mount
+  useEffect(() => {
+    async function checkSession() {
+      const user = await getAdminSession()
+      if (user) {
+        setLoggedIn(true)
+      }
+    }
+    checkSession()
+  }, [])
+
   useEffect(() => {
     if (loggedIn) loadAllData()
   }, [loggedIn])
@@ -42,10 +54,17 @@ export default function Admin() {
     setLoadingData(false)
   }
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault()
-    if (checkAdminPass(pass)) { setLoggedIn(true); setError('') }
-    else setError('Wrong password! Try again.')
+    setError('')
+    setLoadingData(true)
+    const res = await loginAdmin(email, pass)
+    if (res.success) {
+      setLoggedIn(true)
+    } else {
+      setError(res.error || 'Wrong credentials! Try again.')
+    }
+    setLoadingData(false)
   }
 
   const handlePhotoUpload = async (e) => {
@@ -54,15 +73,16 @@ export default function Admin() {
     if (!file.type.startsWith('image/')) { setPhotoMsg('❌ Please select an image file!'); return }
     setSavingPhoto(true)
     setPhotoMsg('Uploading to cloud...')
-    const reader = new FileReader()
-    reader.onload = async (ev) => {
-      const ok = await savePhoto(ev.target.result)
-      setPhoto(ev.target.result)
-      setSavingPhoto(false)
-      setPhotoMsg(ok ? '✅ Profile photo saved to cloud! Everyone can see it now.' : '❌ Upload failed. Try again.')
-      setTimeout(() => setPhotoMsg(''), 4000)
+    const ok = await savePhoto(file)
+    if (ok) {
+      const url = await getPhoto()
+      setPhoto(url)
+      setPhotoMsg('✅ Profile photo saved to cloud! Everyone can see it now.')
+    } else {
+      setPhotoMsg('❌ Upload failed. Try again.')
     }
-    reader.readAsDataURL(file)
+    setSavingPhoto(false)
+    setTimeout(() => setPhotoMsg(''), 4000)
   }
 
   const handleResumeUpload = async (e) => {
@@ -72,15 +92,16 @@ export default function Admin() {
     if (file.size > 4 * 1024 * 1024) { setResumeMsg('❌ File too large! Max 4MB.'); return }
     setSavingResume(true)
     setResumeMsg('Uploading to cloud...')
-    const reader = new FileReader()
-    reader.onload = async (ev) => {
-      const ok = await saveResume(ev.target.result, file.name)
-      setResume({ data: ev.target.result, name: file.name })
-      setSavingResume(false)
-      setResumeMsg(ok ? '✅ Resume saved to cloud! Download button is now active.' : '❌ Upload failed. Try again.')
-      setTimeout(() => setResumeMsg(''), 4000)
+    const ok = await saveResume(file, file.name)
+    if (ok) {
+      const r = await getResume()
+      setResume(r)
+      setResumeMsg('✅ Resume saved to cloud! Download button is now active.')
+    } else {
+      setResumeMsg('❌ Upload failed. Try again.')
     }
-    reader.readAsDataURL(file)
+    setSavingResume(false)
+    setTimeout(() => setResumeMsg(''), 4000)
   }
 
   const handleSaveProject = async () => {
@@ -120,18 +141,20 @@ export default function Admin() {
           <Lock size={28} />
         </div>
         <h2 style={{ fontWeight: 900, fontSize: 24, color: '#1a1a2e', marginBottom: 8 }}>Admin Panel</h2>
-        <p style={{ color: '#9ca3af', fontSize: 14, marginBottom: 32 }}>Enter your password to continue</p>
+        <p style={{ color: '#9ca3af', fontSize: 14, marginBottom: 32 }}>Enter your credentials to continue</p>
         <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <input className="input-style" type="email" placeholder="Enter admin email" value={email} onChange={e => { setEmail(e.target.value); setError('') }} required />
           <div style={{ position: 'relative' }}>
-            <input className="input-style" type={showPass ? 'text' : 'password'} placeholder="Enter admin password" value={pass} onChange={e => { setPass(e.target.value); setError('') }} style={{ paddingRight: 44 }} />
+            <input className="input-style" type={showPass ? 'text' : 'password'} placeholder="Enter admin password" value={pass} onChange={e => { setPass(e.target.value); setError('') }} style={{ paddingRight: 44 }} required />
             <button type="button" onClick={() => setShowPass(!showPass)} style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af' }}>
               {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
             </button>
           </div>
           {error && <p style={{ color: '#ef4444', fontSize: 13 }}>{error}</p>}
-          <button type="submit" className="btn-primary" style={{ justifyContent: 'center' }}><Lock size={16} /> Login</button>
+          <button type="submit" className="btn-primary" style={{ justifyContent: 'center' }} disabled={loadingData}>
+            {loadingData ? <><Loader size={16} className="spin" /> Logging in...</> : <><Lock size={16} /> Login</>}
+          </button>
         </form>
-        <p style={{ color: '#9ca3af', fontSize: 12, marginTop: 20 }}>Default password: <code style={{ background: '#f8fafc', padding: '2px 6px', borderRadius: 4 }}>sesha123</code></p>
       </div>
     </main>
   )
@@ -145,7 +168,7 @@ export default function Admin() {
             <h1 style={{ fontWeight: 900, fontSize: 28, color: '#1a1a2e' }}>Admin Panel</h1>
             <p style={{ color: '#9ca3af', fontSize: 14 }}>☁️ All changes save to cloud — visible to everyone instantly!</p>
           </div>
-          <button onClick={() => setLoggedIn(false)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 10, background: '#fff', border: '1px solid #e2e8f0', cursor: 'pointer', color: '#6b7280', fontSize: 14, fontWeight: 500 }}>
+          <button onClick={async () => { await logoutAdmin(); setLoggedIn(false) }} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 10, background: '#fff', border: '1px solid #e2e8f0', cursor: 'pointer', color: '#6b7280', fontSize: 14, fontWeight: 500 }}>
             <LogOut size={15} /> Logout
           </button>
         </div>
