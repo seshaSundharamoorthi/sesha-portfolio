@@ -8,7 +8,7 @@ const CODE_LINES = [
   { key: 'const developer', sym: '= {', color: '#c792ea' },
   { key: '  name', val: '"Sesha S"', kc: '#80cbc4', vc: '#c3e88d' },
   { key: '  role', val: '"Full Stack Dev"', kc: '#80cbc4', vc: '#c3e88d' },
-  { key: '  passion', val: '"Building"', kc: '#80cbc4', vc: '#c3e88d' },
+  { key: '  passion', val: '"Design. Develop. Deliver."', kc: '#80cbc4', vc: '#c3e88d' },
   { key: '}', sym: '', color: '#c792ea' },
 ]
 

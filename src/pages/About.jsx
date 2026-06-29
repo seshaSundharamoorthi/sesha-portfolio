@@ -17,7 +17,7 @@ export default function About() {
   }, [])
 
   const tags = [
-    { icon: <GraduationCap size={14} />, label: 'CS Graduate', color: '#7C3AED', bg: '#f3f0ff' },
+    { icon: <GraduationCap size={14} />, label: 'B-Tech IT (2027)', color: '#7C3AED', bg: '#f3f0ff' },
     { icon: <MapPin size={14} />, label: 'Based in India', color: '#059669', bg: '#ecfdf5' },
     { icon: <Briefcase size={14} />, label: 'Open to Opportunities', color: '#ea580c', bg: '#fff7ed' },
   ]
